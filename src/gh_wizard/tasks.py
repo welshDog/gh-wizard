@@ -57,6 +57,21 @@ class TaskBreakdown:
         ],
     }
 
+    KEYWORD_MAPPING = {
+        "fix": "bugfix",
+        "bug": "bugfix",
+        "patch": "bugfix",
+        "release": "release",
+        "deploy": "release",
+        "ship": "release",
+        "feature": "feature",
+        "add": "feature",
+        "implement": "feature",
+        "refactor": "refactor",
+        "cleanup": "refactor",
+        "optimize": "refactor",
+    }
+
     def breakdown(self, task: str) -> List[Dict[str, Any]]:
         """Break down a task into steps.
         
@@ -69,18 +84,34 @@ class TaskBreakdown:
         # Simple pattern matching
         task_lower = task.lower()
         
-        for pattern, steps in self.PATTERNS.items():
-            if pattern in task_lower:
-                result = []
-                for step in steps:
-                    result.append({
-                        "name": step["name"],
-                        "description": step["desc"],
-                        "time_estimate": step["time"],
-                        "priority": "high" if pattern == "release" else "normal",
-                    })
-                logger.info(f"Broke down task '{task}' using pattern: {pattern}")
-                return result
+        # Check specific keywords first
+        matched_pattern = None
+        for keyword, pattern in self.KEYWORD_MAPPING.items():
+            if keyword in task_lower:
+                matched_pattern = pattern
+                break
+        
+        # Fallback to direct pattern matching if no keyword match
+        if not matched_pattern:
+            for pattern in self.PATTERNS:
+                if pattern in task_lower:
+                    matched_pattern = pattern
+                    break
+        
+        if matched_pattern:
+            steps = self.PATTERNS[matched_pattern]
+            result = []
+            for step in steps:
+                result.append({
+                    "name": step["name"],
+                    "description": step["desc"],
+                    "time_estimate": step["time"],
+                    "priority": "high" if matched_pattern == "release" else "normal",
+                })
+            logger.info(f"Broke down task '{task}' using pattern: {matched_pattern}")
+            return result
+        
+        # Default breakdown if no pattern matches
         
         # Default breakdown if no pattern matches
         logger.warning(f"No pattern matched for task: {task}")

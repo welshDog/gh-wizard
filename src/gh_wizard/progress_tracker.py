@@ -37,9 +37,13 @@ class ProgressDisplay:
             TimeRemainingColumn(),
         )
 
-    def render_pomodoro_display(self, session: PomodoroSession) -> Panel:
+    def render_pomodoro_display(self, session: PomodoroSession, task_title: Optional[str] = None) -> Panel:
         """Render Pomodoro session display.
         
+        Args:
+            session: The Pomodoro session
+            task_title: Optional task being worked on
+            
         Returns:
             Rich Panel with session info
         """
@@ -55,9 +59,11 @@ class ProgressDisplay:
         color = "green" if session.current_phase == "work" else "blue"
         phase_emoji = "💼" if session.current_phase == "work" else "☕"
         
+        task_info = f"[bold cyan]Task: {task_title}[/bold cyan]\n" if task_title else ""
+        
         content = f"""
 {phase_emoji} {session.current_phase.upper()}
-
+{task_info}
 [bold {color}]{remaining}[/bold {color}]
 {bar}
 {progress:.1f}%
@@ -157,7 +163,7 @@ class MultiTaskProgress:
             "completed_steps": 0,
             "status": "in_progress",
         }
-        logger.info(f"Task added: {task_id}")
+        logger.info("Task added: %s", task_id)
 
     def update_task(self, task_id: str, steps_completed: int) -> None:
         """Update task progress.
@@ -178,7 +184,7 @@ class MultiTaskProgress:
                 >= self.tasks[task_id]["total_steps"]
             ):
                 self.tasks[task_id]["status"] = "complete"
-                logger.info(f"Task completed: {task_id}")
+                logger.info("Task completed: %s", task_id)
 
     def get_overall_progress(self) -> float:
         """Get overall progress across all tasks.
@@ -187,15 +193,15 @@ class MultiTaskProgress:
             Overall completion percentage (0-100)
         """
         if not self.tasks:
-            return 0
+            return 0.0
         
-        total_steps = sum(t["total_steps"] for t in self.tasks.values())
-        completed_steps = sum(t["completed_steps"] for t in self.tasks.values())
+        total_steps = float(sum(t["total_steps"] for t in self.tasks.values()))
+        completed_steps = float(sum(t["completed_steps"] for t in self.tasks.values()))
         
         if total_steps == 0:
-            return 0
+            return 0.0
         
-        return (completed_steps / total_steps) * 100
+        return (completed_steps / total_steps) * 100.0
 
     def render_overview(self) -> Table:
         """Render overview of all tasks.

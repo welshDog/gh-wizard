@@ -1,7 +1,9 @@
 """Eisenhower Matrix for task prioritization."""
 
-from typing import List, Dict, Any
+from typing import List, Dict
 from enum import Enum
+import json
+from pathlib import Path
 from pydantic import BaseModel
 from rich.table import Table
 from rich.panel import Panel
@@ -95,79 +97,89 @@ class EisenhowerMatrix:
         self.tasks[task.id] = task
         quadrant = task.get_quadrant()
         self.quadrants[quadrant].append(task.id)
-        logger.info(f"Task added to {quadrant.value}: {task.title}")
+        logger.info("Task added to %s: %s", quadrant.value, task.title)
 
     def get_quadrant_tasks(self, quadrant: Quadrant) -> List[Task]:
-        """Get all tasks in a quadrant.
-        
-        Args:
-            quadrant: Quadrant enum value
+        """Get all tasks in a specific quadrant."""
+        task_ids = self.quadrants.get(quadrant, [])
+        return [self.tasks[tid] for tid in task_ids if tid in self.tasks]
+
+    def save(self, filepath: str = "eisenhower_matrix.json") -> None:
+        """Save tasks to JSON file."""
+        data = {
+            "tasks": {tid: task.model_dump() for tid, task in self.tasks.items()}
+        }
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        logger.info("Matrix saved to %s", filepath)
+
+    def load(self, filepath: str = "eisenhower_matrix.json") -> None:
+        """Load tasks from JSON file."""
+        path = Path(filepath)
+        if not path.exists():
+            return
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
             
-        Returns:
-            List of tasks in quadrant
-        """
-        task_ids = self.quadrants[quadrant]
-        return [self.tasks[tid] for tid in task_ids if not self.tasks[tid].completed]
+            self.tasks = {}
+            self.quadrants = {q: [] for q in Quadrant}
+            
+            for _, task_data in data.get("tasks", {}).items():
+                task = Task(**task_data)
+                self.add_task(task)
+            
+            logger.info("Matrix loaded from %s", filepath)
+        except Exception as e:
+            logger.error("Error loading matrix: %s", e)
 
     def get_priority_tasks(self) -> List[Task]:
-        """Get all tasks sorted by priority.
-        
-        Returns:
-            Tasks sorted from critical to low priority
-        """
+        """Get all tasks sorted by priority."""
         all_tasks = list(self.tasks.values())
         priority_order = {Priority.CRITICAL: 0, Priority.HIGH: 1, Priority.NORMAL: 2, Priority.LOW: 3}
         all_tasks.sort(key=lambda t: priority_order[t.get_priority()])
         return [t for t in all_tasks if not t.completed]
 
     def mark_complete(self, task_id: str) -> None:
-        """Mark task as complete.
-        
-        Args:
-            task_id: Task identifier
-        """
+        """Mark task as complete."""
         if task_id in self.tasks:
             self.tasks[task_id].completed = True
-            quadrant = self.tasks[task_id].get_quadrant()
-            if task_id in self.quadrants[quadrant]:
-                self.quadrants[quadrant].remove(task_id)
-            logger.info(f"Task completed: {task_id}")
+            # We don't remove from quadrants, just mark as complete
+            logger.info("Task completed: %s", task_id)
 
-    def render_matrix(self) -> Panel:
-        """Render Eisenhower Matrix visualization.
+    def render_matrix(self) -> None:
+        """Render the Eisenhower Matrix to the console."""
+        # Create a 2x2 grid using tables
         
-        Returns:
-            Rich Panel with matrix
-        """
-        q1_tasks = self.get_quadrant_tasks(Quadrant.Q1)
-        q2_tasks = self.get_quadrant_tasks(Quadrant.Q2)
-        q3_tasks = self.get_quadrant_tasks(Quadrant.Q3)
-        q4_tasks = self.get_quadrant_tasks(Quadrant.Q4)
-        
-        # Create matrix display
-        content = f"""
-[bold red]Q1: DO FIRST[/bold red]              [bold green]Q2: SCHEDULE[/bold green]
-Urgent + Important         Not Urgent + Important
-{self._format_quadrant(q1_tasks)}    {self._format_quadrant(q2_tasks)}
+        def create_quadrant_panel(quadrant: Quadrant, title: str, color: str) -> Panel:
+            tasks = self.get_quadrant_tasks(quadrant)
+            content = ""
+            for task in tasks:
+                status = "✅" if task.completed else "☐"
+                content += f"{status} {task.title}\n"
+            if not content:
+                content = "[dim]No tasks[/dim]"
+            
+            return Panel(content, title=f"[{color}]{title}[/{color}]", border_style=color)
 
-[bold yellow]Q3: DELEGATE[/bold yellow]          [bold dim]Q4: ELIMINATE[/bold dim]
-Urgent + Not Important     Not Urgent + Not Important
-{self._format_quadrant(q3_tasks)}    {self._format_quadrant(q4_tasks)}
-"""
+        q1 = create_quadrant_panel(Quadrant.Q1, "DO FIRST (Urgent & Important)", "red")
+        q2 = create_quadrant_panel(Quadrant.Q2, "SCHEDULE (Not Urgent & Important)", "blue")
+        q3 = create_quadrant_panel(Quadrant.Q3, "DELEGATE (Urgent & Not Important)", "yellow")
+        q4 = create_quadrant_panel(Quadrant.Q4, "ELIMINATE (Not Urgent & Not Important)", "green")
+
+        # Create a main table to hold the quadrants
+        grid = Table.grid(expand=True, padding=1)
+        grid.add_column(ratio=1)
+        grid.add_column(ratio=1)
         
-        return Panel(
-            content,
-            title="📊 Eisenhower Matrix",
-            border_style="blue",
-            expand=False,
-        )
+        grid.add_row(q1, q2)
+        grid.add_row(q3, q4)
+        
+        console.print(Panel(grid, title="⚡ Eisenhower Matrix", border_style="bold white"))
 
     def render_priority_list(self) -> Table:
-        """Render priority-sorted task list.
-        
-        Returns:
-            Rich Table with prioritized tasks
-        """
+        """Render priority-sorted task list."""
         table = Table(title="🎯 Priority Task List")
         table.add_column("Priority", style="magenta", width=10)
         table.add_column("Title", style="cyan")
@@ -195,24 +207,3 @@ Urgent + Not Important     Not Urgent + Not Important
             )
         
         return table
-
-    def _format_quadrant(self, tasks: List[Task]) -> str:
-        """Format tasks for quadrant display.
-        
-        Args:
-            tasks: List of tasks
-            
-        Returns:
-            Formatted task list
-        """
-        if not tasks:
-            return "(none)"
-        
-        lines = []
-        for task in tasks[:3]:  # Show max 3 per quadrant
-            lines.append(f"• {task.title}")
-        
-        if len(tasks) > 3:
-            lines.append(f"+ {len(tasks) - 3} more")
-        
-        return "\n".join(lines)

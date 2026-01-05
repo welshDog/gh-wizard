@@ -1,15 +1,25 @@
 """Pomodoro timer with break reminders and hyperfocus mode."""
 
-import asyncio
-import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional, Callable
-from pathlib import Path
 
 from gh_wizard.utils.logger import setup_logger
 from gh_wizard.utils.config import Config
+import os
 
 logger = setup_logger(__name__)
+
+
+def notify_phase_complete(_phase: str):
+    """Cross-platform beep on phase completion."""
+    try:
+        if os.name == 'nt':  # Windows
+            import winsound
+            winsound.Beep(1000, 500)  # 1kHz, 500ms
+        else:  # Linux/Mac
+            print('\a', end='', flush=True)
+    except Exception as e:
+        logger.error("Error playing sound: %s", e)
 
 
 class PomodoroSession:
@@ -43,14 +53,14 @@ class PomodoroSession:
         self.total_time = work_minutes * 60
         self.start_time: Optional[datetime] = None
         self.paused_time: Optional[datetime] = None
-        self.pause_offset = 0  # Track paused duration
+        self.pause_offset: float = 0.0  # Track paused duration
 
     def start(self) -> None:
         """Start the Pomodoro session."""
         self.is_running = True
         self.is_paused = False
         self.start_time = datetime.now()
-        logger.info(f"Pomodoro session started: {self.work_minutes} min work")
+        logger.info("Pomodoro session started: %s min work", self.work_minutes)
 
     def pause(self) -> None:
         """Pause the Pomodoro session."""
@@ -99,43 +109,38 @@ class PomodoroSession:
         """Check if current phase is complete."""
         return self.get_remaining_seconds() <= 0
 
-    def advance_to_break(self) -> str:
-        """Advance to break phase. Returns break type."""
-        self.completed_sessions += 1
-        
-        # Determine break type
-        if self.completed_sessions % self.sessions_until_long_break == 0:
-            break_type = "long"
-            self.total_time = self.long_break_minutes * 60
-        else:
-            break_type = "short"
-            self.total_time = self.short_break_minutes * 60
-        
-        self.current_phase = "break"
-        self.time_remaining = self.total_time
-        self.pause_offset = 0
-        self.start_time = datetime.now()
-        
-        logger.info(f"Moving to {break_type} break after {self.completed_sessions} sessions")
-        return break_type
-
-    def advance_to_work(self) -> None:
-        """Advance to work phase."""
-        self.current_phase = "work"
-        self.total_time = self.work_minutes * 60
-        self.time_remaining = self.total_time
-        self.pause_offset = 0
-        self.start_time = datetime.now()
-        logger.info("Moving to work phase")
-
     def format_time(self, seconds: Optional[int] = None) -> str:
         """Format seconds as MM:SS."""
         if seconds is None:
             seconds = self.get_remaining_seconds()
         
-        minutes = seconds // 60
-        secs = seconds % 60
+        minutes = int(seconds // 60)
+        secs = int(seconds % 60)
         return f"{minutes:02d}:{secs:02d}"
+
+    def next_phase(self) -> None:
+        """Switch to the next phase (work -> break -> work)."""
+        self.stop()
+        
+        if self.current_phase == "work":
+            self.completed_sessions += 1
+            if self.completed_sessions % self.sessions_until_long_break == 0:
+                self.current_phase = "long_break"
+                self.total_time = self.long_break_minutes * 60
+                logger.info("Starting long break: %s min", self.long_break_minutes)
+            else:
+                self.current_phase = "short_break"
+                self.total_time = self.short_break_minutes * 60
+                logger.info("Starting short break: %s min", self.short_break_minutes)
+        else:
+            self.current_phase = "work"
+            self.total_time = self.work_minutes * 60
+            logger.info("Starting work session: %s min", self.work_minutes)
+            
+        self.start_time = datetime.now()
+        self.pause_offset = 0
+        self.is_running = True
+        self.is_paused = False
 
 
 class BreakReminder:
@@ -156,14 +161,31 @@ class BreakReminder:
         self.reminder_callback = reminder_callback
         self.last_activity_time = datetime.now()
         self.idle_threshold = 3600  # 1 hour in seconds
-        self.break_suggestions = [
-            "Time for a quick walk! 🚶",
-            "Stretch those muscles! 🤸",
-            "Grab some water 💧",
-            "Look away from the screen 👀",
-            "Do some deep breathing 🌬️",
-            "Check the weather! 🌤️",
-        ]
+        
+        # Suggestions categorized by intensity/duration
+        self.suggestions = {
+            "short": [
+                "Stretch your arms and neck 🧘",
+                "Look 20 feet away for 20 seconds 👀",
+                "Take 3 deep breaths 🌬️",
+                "Hydrate! Drink some water 💧",
+                "Stand up and shake it out 💃",
+            ],
+            "medium": [
+                "Walk around the room 🚶",
+                "Do 10 jumping jacks 🏃",
+                "Refill your water bottle 🚰",
+                "Clear your desk clutter 🧹",
+                "Check the weather outside 🌤️",
+            ],
+            "long": [
+                "Go for a short walk outside 🌳",
+                "Eat a healthy snack 🍎",
+                "Do a quick meditation session 🧘‍♂️",
+                "Call a friend or family member 📞",
+                "Listen to your favorite song 🎵",
+            ]
+        }
 
     def should_take_break(self, session: PomodoroSession) -> bool:
         """Determine if a break should be suggested."""
@@ -177,14 +199,30 @@ class BreakReminder:
         
         return False
 
-    def get_break_suggestion(self) -> str:
-        """Get a random break suggestion."""
+    def get_break_suggestion(self, session_count: int = 1) -> str:
+        """Get a cycle-aware break suggestion.
+        
+        Args:
+            session_count: Number of completed sessions
+        """
         import random
-        return random.choice(self.break_suggestions)
+        
+        if session_count % 4 == 0:
+            # Long break suggestions
+            category = "long"
+        elif session_count % 2 == 0:
+            # Medium intensity for every other break
+            category = "medium"
+        else:
+            # Quick suggestions for standard breaks
+            category = "short"
+            
+        suggestion = random.choice(self.suggestions[category])
+        return f"({category.title()} Break) {suggestion}"
 
     def trigger_reminder(self, session: PomodoroSession) -> None:
         """Trigger break reminder."""
-        suggestion = self.get_break_suggestion()
+        suggestion = self.get_break_suggestion(session.completed_sessions)
         
         if self.reminder_callback:
             self.reminder_callback(
@@ -192,7 +230,7 @@ class BreakReminder:
                 message=f"You've worked for {session.get_elapsed_seconds() // 60} minutes.\n{suggestion}",
             )
         
-        logger.info(f"Break reminder triggered: {suggestion}")
+        logger.info("Break reminder triggered: %s", suggestion)
 
     def record_activity(self) -> None:
         """Record user activity."""
