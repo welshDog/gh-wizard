@@ -1,0 +1,59 @@
+{
+  "tasks": {
+    "1": {
+      "id": "1",
+      "title": "Fix critical bug in parser",
+      "description": "",
+      "is_urgent": true,
+      "is_important": true,
+      "repo": "",
+      "issue_number": 0,
+      "estimated_time": 45,
+      "completed": false
+    },
+    "2": {
+      "id": "2",
+      "title": "Draft Phase 3 Roadmap",
+      "description": "",
+      "is_urgent": false,
+      "is_important": true,
+      "repo": "",
+      "issue_number": 0,
+      "estimated_time": 60,
+      "completed": false
+    },
+    "3": {
+      "id": "3",
+      "title": "Update documentation screenshots",
+      "description": "",
+      "is_urgent": true,
+      "is_important": false,
+      "repo": "",
+      "issue_number": 0,
+      "estimated_time": 30,
+      "completed": false
+    },
+    "4": {
+      "id": "4",
+      "title": "Organize desktop icons",
+      "description": "",
+      "is_urgent": false,
+      "is_important": false,
+      "repo": "",
+      "issue_number": 0,
+      "estimated_time": 15,
+      "completed": false
+    },
+    "1767656010": {
+      "id": "1767656010",
+      "title": "Create GitHub Release v0.1.0",
+      "description": "",
+      "is_urgent": true,
+      "is_important": true,
+      "repo": "",
+      "issue_number": 0,
+      "estimated_time": 25,
+      "completed": true
+    }
+  }
+}
