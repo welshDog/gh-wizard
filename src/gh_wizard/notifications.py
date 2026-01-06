@@ -71,7 +71,7 @@ class NotificationManager:
             return None
         
         # Group by priority
-        by_priority = {}
+        by_priority: Dict[str, List[Notification]] = {}
         for notif in self.notifications:
             priority = notif.priority.value
             if priority not in by_priority:

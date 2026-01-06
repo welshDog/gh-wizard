@@ -106,7 +106,7 @@ class SessionManager:
 
     def get_last_session(self) -> Optional[Dict[str, Any]]:
         """Get the most recently modified session."""
-        sessions = []
+        sessions: List[Dict[str, Any]] = []
         for session_file in self.sessions_dir.glob("*.json"):
             try:
                 with open(session_file) as f:
@@ -180,7 +180,8 @@ class SessionManager:
         """Load session from disk."""
         session_file = self.sessions_dir / f"{session_id}.json"
         with open(session_file) as f:
-            return json.load(f)
+            result: Dict[str, Any] = json.load(f)
+            return result
 
     def _save_session(self, session_id: str, session: Dict[str, Any]) -> None:
         """Save session to disk."""
@@ -198,7 +199,7 @@ class SessionManager:
         try:
             if self.current_session_file.exists():
                 with open(self.current_session_file) as f:
-                    data = json.load(f)
+                    data: Dict[str, Any] = json.load(f)
                     return data.get("session_id")
         except Exception as e:
             logger.warning(f"Failed to get current session: {e}")

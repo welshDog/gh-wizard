@@ -55,6 +55,9 @@ gh-wizard = "gh_wizard.cli:main"
 where = ["src"]
 include = ["gh_wizard*"]
 
+[tool.setuptools.package-data]
+gh_wizard = ["py.typed"]
+
 [tool.black]
 line-length = 100
 target-version = ['py39']

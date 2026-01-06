@@ -49,7 +49,7 @@ class GitHubAPIClient(BaseModel):
             "Content-Type": "application/json",
         }
         
-        payload = {"query": query_string}
+        payload: Dict[str, Any] = {"query": query_string}
         if variables:
             payload["variables"] = variables
         
@@ -57,12 +57,13 @@ class GitHubAPIClient(BaseModel):
             response = requests.post(self.endpoint, json=payload, headers=headers, timeout=30)
             response.raise_for_status()
             
-            data = response.json()
+            data: Dict[str, Any] = response.json()
             if "errors" in data:
                 logger.error(f"GraphQL error: {data['errors']}")
                 raise Exception(f"GraphQL error: {data['errors']}")
             
-            return data.get("data", {})
+            result: Dict[str, Any] = data.get("data", {})
+            return result
         except requests.RequestException as e:
             logger.error(f"API request failed: {e}")
             raise

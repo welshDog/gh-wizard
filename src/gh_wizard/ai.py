@@ -64,7 +64,7 @@ class PatternLearner:
         action_counts = Counter(e["type"] for e in recent)
         
         # Count repos
-        repo_counts = Counter()
+        repo_counts: Counter[str] = Counter()
         for e in recent:
             if "repo" in e["details"]:
                 repo_counts[e["details"]["repo"]] += 1
@@ -100,7 +100,8 @@ class PatternLearner:
         if self.history_file.exists():
             try:
                 with open(self.history_file) as f:
-                    return json.load(f)
+                    result: List[Dict[str, Any]] = json.load(f)
+                    return result
             except Exception as e:
                 logger.warning(f"Failed to load history: {e}")
         return []
